@@ -1,0 +1,393 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Apps Collection</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    background: #f5f5f7;
+    color: #1d1d1f;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: flex-start;
+    padding: 32px 16px;
+  }
+
+  /* ===== HOME VIEW ===== */
+  .games {
+    display: flex;
+    flex-direction: row;
+    gap: 16px;
+    flex-wrap: wrap;
+    justify-content: center;
+    align-items: flex-start;
+    width: 100%;
+  }
+
+  .game-card {
+    width: clamp(140px, 42vw, 180px);
+    height: clamp(170px, 52vw, 220px);
+    background: #ffffff;
+    border-radius: 16px;
+    display: flex;
+    flex-direction: column;
+    cursor: pointer;
+    border: 1px solid #e5e5ea;
+    overflow: hidden;
+    transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+    user-select: none;
+  }
+  .game-card:hover { transform: translateY(-4px); box-shadow: 0 12px 32px rgba(0,0,0,0.08); border-color: #d1d1d6; }
+  .game-card:active { transform: translateY(-2px) scale(0.98); }
+
+  .game-image {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: linear-gradient(160deg, #f9f9fb 0%, #ececf1 100%);
+    overflow: hidden;
+  }
+  .game-image img { width: 100%; height: 100%; object-fit: cover; }
+
+  .game-title {
+    padding: 12px 8px;
+    text-align: center;
+    font-size: clamp(0.9rem, 3.5vw, 1rem);
+    font-weight: 600;
+    color: #1d1d1f;
+    border-top: 1px solid #e5e5ea;
+    background: #ffffff;
+  }
+
+  /* ===== DETAIL VIEW ===== */
+  .detail {
+    width: 100%;
+    max-width: 420px;
+    background: #ffffff;
+    border-radius: 20px;
+    border: 1px solid #e5e5ea;
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    min-height: 70vh;
+    animation: fadeIn 0.2s ease;
+  }
+  @keyframes fadeIn {
+    from { opacity: 0; transform: translateY(6px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+
+  .back-btn {
+    align-self: flex-start;
+    background: transparent;
+    border: none;
+    color: #007aff;
+    font-size: 0.95rem;
+    font-weight: 500;
+    cursor: pointer;
+    padding: 4px 0;
+  }
+  .back-btn:hover { opacity: 0.7; }
+
+  .detail-image {
+    width: 100%;
+    height: 180px;
+    border-radius: 14px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: linear-gradient(160deg, #f9f9fb 0%, #ececf1 100%);
+    overflow: hidden;
+  }
+  .detail-image img { width: 100%; height: 100%; object-fit: cover; }
+
+  .detail-title { font-size: 1.4rem; font-weight: 600; }
+  .detail-subtitle {
+    font-size: 0.8rem; color: #86868b;
+    text-transform: uppercase; letter-spacing: 0.05em;
+    font-weight: 500; margin-top: -8px;
+  }
+  .detail-desc { font-size: 0.9rem; color: #3a3a3c; line-height: 1.55; }
+
+  .play-btn {
+    margin-top: auto;
+    width: 100%;
+    padding: 14px;
+    background: #007aff;
+    color: #ffffff;
+    border: none;
+    border-radius: 12px;
+    font-size: 1rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 0.2s ease, transform 0.1s ease;
+  }
+  .play-btn:hover { background: #0066d6; }
+  .play-btn:active { transform: scale(0.98); }
+
+  /* ===== GAME VIEW (module container) ===== */
+  .game-view {
+    width: 100%;
+    max-width: 100%;
+    height: calc(100vh - 64px);
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    animation: fadeIn 0.2s ease;
+  }
+
+  .game-topbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 4px;
+    flex: 0 0 auto;
+  }
+  .game-topbar .back-btn { color: #007aff; }
+
+  .game-container {
+    flex: 1 1 auto;
+    min-height: 0;
+    width: 100%;
+    border: 1px solid #e5e5ea;
+    border-radius: 16px;
+    background: #ffffff;
+    overflow: hidden;
+    position: relative;
+  }
+
+  .loading-msg {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #86868b;
+    font-size: 0.9rem;
+  }
+
+  .hidden { display: none !important; }
+
+  footer {
+    position: fixed;
+    bottom: 16px;
+    right: 20px;
+    font-size: 0.75rem;
+    color: #86868b;
+    z-index: 5;
+  }
+</style>
+</head>
+<body>
+
+  <!-- ===== HOME VIEW ===== -->
+  <main id="home-view" class="games">
+    <div class="game-card" data-game="minesweeper">
+      <div class="game-image">
+        <img src="assets/minesweeper.png" alt="Minesweeper">
+      </div>
+      <div class="game-title">Minesweeper</div>
+    </div>
+
+    <div class="game-card" data-game="uno">
+      <div class="game-image">
+        <img src="assets/uno.png" alt="Uno">
+      </div>
+      <div class="game-title">Uno</div>
+    </div>
+  </main>
+
+  <!-- ===== DETAIL VIEW ===== -->
+  <section id="detail-view" class="detail hidden">
+    <button class="back-btn" id="back-btn">← Kembali</button>
+    <div class="detail-image" id="detail-image"></div>
+    <div class="detail-title" id="detail-title"></div>
+    <div class="detail-subtitle">Cara Bermain</div>
+    <div class="detail-desc" id="detail-desc"></div>
+    <button class="play-btn" id="play-btn">Play</button>
+  </section>
+
+  <!-- ===== GAME VIEW (module host) ===== -->
+  <section id="game-view" class="game-view hidden">
+    <div class="game-topbar">
+      <button class="back-btn" id="exit-game-btn">← Keluar</button>
+      <span id="game-view-title" style="font-weight:600; font-size:0.9rem;"></span>
+    </div>
+    <div id="game-container" class="game-container"></div>
+  </section>
+
+  <footer>v0.6</footer>
+
+  <script type="module">
+    // --- Data tiap game ---
+    // module : path ES module di folder games/
+    const gameData = {
+      minesweeper: {
+        title: 'Minesweeper',
+        image: 'assets/minesweeper.png',
+        module: './games/minesweeper.js',
+        howTo: 'Buka semua kotak aman tanpa mengklik ranjau. Angka pada kotak menunjukkan jumlah ranjau di 8 kotak sekitarnya. Tandai kotak yang kamu curigai dengan bendera, dan buka seluruh kotak aman untuk menang.'
+      },
+      uno: {
+        title: 'Uno',
+        image: 'assets/uno.png',
+        module: './games/uno.js',
+        howTo: 'Cocokkan kartu di tanganmu dengan kartu paling atas di meja — sama warna atau sama angka. Habiskan semua kartu lebih dulu untuk menang.'
+      }
+    };
+
+    // --- Elemen ---
+    const homeView      = document.getElementById('home-view');
+    const detailView    = document.getElementById('detail-view');
+    const gameView      = document.getElementById('game-view');
+    const detailImage   = document.getElementById('detail-image');
+    const detailTitle   = document.getElementById('detail-title');
+    const detailDesc    = document.getElementById('detail-desc');
+    const backBtn       = document.getElementById('back-btn');
+    const playBtn       = document.getElementById('play-btn');
+    const exitGameBtn   = document.getElementById('exit-game-btn');
+    const gameContainer = document.getElementById('game-container');
+    const gameViewTitle = document.getElementById('game-view-title');
+
+    let currentGame = null;   // key game aktif
+    let activeModule = null;  // { instance, destroy, pause, resume }
+
+    // --- Utility: switch view ---
+    function showView(view) {
+      [homeView, detailView, gameView].forEach(v => v.classList.add('hidden'));
+      view.classList.remove('hidden');
+    }
+
+    // --- Buka detail ---
+    function openDetail(gameKey) {
+      const data = gameData[gameKey];
+      if (!data) return;
+      currentGame = gameKey;
+      detailImage.innerHTML = `<img src="${data.image}" alt="${data.title}">`;
+      detailTitle.textContent = data.title;
+      detailDesc.textContent = data.howTo;
+      showView(detailView);
+    }
+
+    // --- Bersihkan module aktif (destroy + reset) ---
+    function destroyActiveModule() {
+      if (!activeModule) return;
+      try { activeModule.destroy(); } catch (e) { console.warn('[Hub] destroy error:', e); }
+      activeModule = null;
+    }
+
+    // --- Kembali ke home ---
+    function goHome() {
+      destroyActiveModule();
+      gameContainer.innerHTML = '';
+      showView(homeView);
+      currentGame = null;
+    }
+
+    // --- Kembali ke detail (setelah keluar game) ---
+    function exitGame() {
+      destroyActiveModule();
+      gameContainer.innerHTML = '';
+      showView(detailView);
+    }
+
+    // --- Jalankan game (dynamic import module) ---
+    async function launchGame() {
+      if (!currentGame) return;
+      const data = gameData[currentGame];
+      if (!data.module) {
+        alert(`Game "${data.title}" belum siap (module belum tersedia).`);
+        return;
+      }
+
+      gameViewTitle.textContent = data.title;
+      showView(gameView);
+
+      // --- Bersihkan instance sebelumnya ---
+      destroyActiveModule();
+      gameContainer.innerHTML = '<div class="loading-msg">Memuat game…</div>';
+
+      try {
+        // --- Dynamic import module game ---
+        const module = await import(data.module);
+
+        // --- Bersihkan pesan loading ---
+        gameContainer.innerHTML = '';
+
+        // --- Pastikan module punya fungsi init ---
+        if (typeof module.init !== 'function') {
+          throw new Error(`Module ${data.module} tidak punya export function init()`);
+        }
+
+        // --- Inisialisasi game + pasang callback komunikasi ---
+        const instance = module.init(gameContainer, {
+          onReady: (info) => console.log('[Hub] Game ready:', info),
+          onExit:  (info) => {
+            console.log('[Hub] Exit diminta:', info);
+            exitGame();
+          },
+          onWin:   (info) => console.log('[Hub] Win:', info),
+          onLose:  (info) => console.log('[Hub] Lose:', info),
+          onState: (info) => console.log('[Hub] State:', info)
+        });
+
+        // --- Simpan handle supaya bisa dikontrol & dibersihkan ---
+        activeModule = {
+          destroy: () => { try { instance.destroy(); } catch (e) {} },
+          pause:   () => { try { instance.pause();   } catch (e) {} },
+          resume:  () => { try { instance.resume();  } catch (e) {} }
+        };
+
+      } catch (err) {
+        console.error('[Hub] Gagal memuat game:', err);
+        gameContainer.innerHTML = '';
+        alert(
+          `Gagal memuat game "${data.title}".\n\n` +
+          `Pastikan:\n` +
+          `• File "${data.module}" sudah ada\n` +
+          `• Halaman dijalankan via server (bukan file://)`
+        );
+        // --- Kembali ke detail kalau gagal ---
+        showView(detailView);
+      }
+    }
+
+    // --- Listener kartu ---
+    document.querySelectorAll('.game-card').forEach(card => {
+      card.addEventListener('click', () => openDetail(card.dataset.game));
+    });
+
+    backBtn.addEventListener('click', goHome);
+    playBtn.addEventListener('click', launchGame);
+    exitGameBtn.addEventListener('click', () => {
+      // --- Kalau ada instance, tanya dulu lewat instance.exit() (biar game bisa konfirmasi) ---
+      if (activeModule) {
+        // --- Panggil exit dari instance — game akan trigger onExit callback ---
+        // --- Tapi kalau game tidak menyediakan, langsung paksa keluar ---
+        try {
+          // --- instance tidak expose exit di API return, jadi fallback ke destroy ---
+          exitGame();
+        } catch (e) { exitGame(); }
+      } else {
+        exitGame();
+      }
+    });
+
+    // --- Auto pause/resume saat tab tidak aktif ---
+    document.addEventListener('visibilitychange', () => {
+      if (!activeModule) return;
+      if (document.hidden) activeModule.pause();
+      else activeModule.resume();
+    });
+  </script>
+
+</body>
+</html>
