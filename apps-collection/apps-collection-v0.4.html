@@ -19,7 +19,7 @@
     padding: 32px 16px;
   }
 
-  /* ===== HOME VIEW ===== */
+  /* --- HOME VIEW --- */
   .games {
     display: flex;
     flex-direction: row;
@@ -66,7 +66,7 @@
     background: #ffffff;
   }
 
-  /* ===== DETAIL VIEW ===== */
+  /* --- DETAIL VIEW --- */
   .detail {
     width: 100%;
     max-width: 420px;
@@ -77,7 +77,8 @@
     display: flex;
     flex-direction: column;
     gap: 16px;
-    min-height: 70vh;
+    max-height: calc(100vh - 64px);
+    overflow-y: auto;
     animation: fadeIn 0.2s ease;
   }
   @keyframes fadeIn {
@@ -133,35 +134,27 @@
   .play-btn:hover { background: #0066d6; }
   .play-btn:active { transform: scale(0.98); }
 
-  /* ===== GAME VIEW (module container) ===== */
+  /* --- GAME VIEW: fullscreen, no white edges --- */
   .game-view {
-    width: 100%;
-    max-width: 100%;
-    height: calc(100vh - 64px);
+    position: fixed;
+    inset: 0;
+    width: 100vw;
+    height: 100vh;
+    height: 100dvh;
     display: flex;
     flex-direction: column;
-    gap: 8px;
+    z-index: 100;
+    background: #2a3f12;
     animation: fadeIn 0.2s ease;
   }
-
-  .game-topbar {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 0 4px;
-    flex: 0 0 auto;
-  }
-  .game-topbar .back-btn { color: #007aff; }
 
   .game-container {
     flex: 1 1 auto;
     min-height: 0;
     width: 100%;
-    border: 1px solid #e5e5ea;
-    border-radius: 16px;
-    background: #ffffff;
     overflow: hidden;
     position: relative;
+    background: #2a3f12;
   }
 
   .loading-msg {
@@ -170,7 +163,7 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    color: #86868b;
+    color: #eaf5d8;
     font-size: 0.9rem;
   }
 
@@ -188,7 +181,7 @@
 </head>
 <body>
 
-  <!-- ===== HOME VIEW ===== -->
+  <!-- --- HOME VIEW --- -->
   <main id="home-view" class="games">
     <div class="game-card" data-game="minesweeper">
       <div class="game-image">
@@ -205,7 +198,7 @@
     </div>
   </main>
 
-  <!-- ===== DETAIL VIEW ===== -->
+  <!-- --- DETAIL VIEW --- -->
   <section id="detail-view" class="detail hidden">
     <button class="back-btn" id="back-btn">← Kembali</button>
     <div class="detail-image" id="detail-image"></div>
@@ -215,31 +208,33 @@
     <button class="play-btn" id="play-btn">Play</button>
   </section>
 
-  <!-- ===== GAME VIEW (module host) ===== -->
+  <!-- --- GAME VIEW (fullscreen, no topbar) --- -->
   <section id="game-view" class="game-view hidden">
-    <div class="game-topbar">
-      <button class="back-btn" id="exit-game-btn">← Keluar</button>
-      <span id="game-view-title" style="font-weight:600; font-size:0.9rem;"></span>
-    </div>
     <div id="game-container" class="game-container"></div>
   </section>
 
-  <footer>v0.6</footer>
+  <footer>v0.7</footer>
+  
+  <!-- --- Storage manager (wajib di-load sebelum game) --- -->
+  <script src="storage.js"></script>
 
-  <script type="module">
+  <script>
     // --- Data tiap game ---
-    // module : path ES module di folder games/
+    // script : path classic script (di-load via <script src>)
+    // global : nama global yang di-expose oleh script tersebut
     const gameData = {
       minesweeper: {
         title: 'Minesweeper',
         image: 'assets/minesweeper.png',
-        module: './games/minesweeper.js',
+        script: 'games/minesweeper.js',
+        global: 'Minesweeper',
         howTo: 'Buka semua kotak aman tanpa mengklik ranjau. Angka pada kotak menunjukkan jumlah ranjau di 8 kotak sekitarnya. Tandai kotak yang kamu curigai dengan bendera, dan buka seluruh kotak aman untuk menang.'
       },
       uno: {
         title: 'Uno',
         image: 'assets/uno.png',
-        module: './games/uno.js',
+        script: 'games/uno.js',
+        global: 'Uno',
         howTo: 'Cocokkan kartu di tanganmu dengan kartu paling atas di meja — sama warna atau sama angka. Habiskan semua kartu lebih dulu untuk menang.'
       }
     };
@@ -253,12 +248,10 @@
     const detailDesc    = document.getElementById('detail-desc');
     const backBtn       = document.getElementById('back-btn');
     const playBtn       = document.getElementById('play-btn');
-    const exitGameBtn   = document.getElementById('exit-game-btn');
     const gameContainer = document.getElementById('game-container');
-    const gameViewTitle = document.getElementById('game-view-title');
 
-    let currentGame = null;   // key game aktif
-    let activeModule = null;  // { instance, destroy, pause, resume }
+    let currentGame  = null;   // --- key game aktif ---
+    let activeModule = null;   // --- { destroy, pause, resume } ---
 
     // --- Utility: switch view ---
     function showView(view) {
@@ -277,17 +270,18 @@
       showView(detailView);
     }
 
-    // --- Bersihkan module aktif (destroy + reset) ---
+    // --- Bersihkan module aktif ---
     function destroyActiveModule() {
       if (!activeModule) return;
       try { activeModule.destroy(); } catch (e) { console.warn('[Hub] destroy error:', e); }
       activeModule = null;
+      // --- Safety: pastikan container bersih ---
+      while (gameContainer.firstChild) gameContainer.removeChild(gameContainer.firstChild);
     }
 
     // --- Kembali ke home ---
     function goHome() {
       destroyActiveModule();
-      gameContainer.innerHTML = '';
       showView(homeView);
       currentGame = null;
     }
@@ -295,40 +289,53 @@
     // --- Kembali ke detail (setelah keluar game) ---
     function exitGame() {
       destroyActiveModule();
-      gameContainer.innerHTML = '';
       showView(detailView);
     }
 
-    // --- Jalankan game (dynamic import module) ---
+    // --- Helper: load classic script ---
+    function loadScript(src) {
+      return new Promise((resolve, reject) => {
+        // --- Cek kalau sudah pernah dimuat ---
+        const existing = document.querySelector(`script[data-game-src="${src}"]`);
+        if (existing && existing.dataset.loaded === '1') return resolve();
+
+        const s = document.createElement('script');
+        s.src = src;
+        s.dataset.gameSrc = src;
+        s.onload = () => { s.dataset.loaded = '1'; resolve(); };
+        s.onerror = () => reject(new Error(`Gagal load ${src}`));
+        document.head.appendChild(s);
+      });
+    }
+
+    // --- Jalankan game ---
     async function launchGame() {
       if (!currentGame) return;
       const data = gameData[currentGame];
-      if (!data.module) {
-        alert(`Game "${data.title}" belum siap (module belum tersedia).`);
+      if (!data.script) {
+        alert(`Game "${data.title}" belum siap.`);
         return;
       }
 
-      gameViewTitle.textContent = data.title;
       showView(gameView);
 
-      // --- Bersihkan instance sebelumnya ---
       destroyActiveModule();
       gameContainer.innerHTML = '<div class="loading-msg">Memuat game…</div>';
 
       try {
-        // --- Dynamic import module game ---
-        const module = await import(data.module);
+        // --- Load classic script ---
+        await loadScript(data.script);
 
-        // --- Bersihkan pesan loading ---
-        gameContainer.innerHTML = '';
-
-        // --- Pastikan module punya fungsi init ---
-        if (typeof module.init !== 'function') {
-          throw new Error(`Module ${data.module} tidak punya export function init()`);
+        // --- Ambil API dari global scope ---
+        const GameAPI = window[data.global];
+        if (!GameAPI || typeof GameAPI.init !== 'function') {
+          throw new Error(`Global "${data.global}" tidak punya init()`);
         }
 
-        // --- Inisialisasi game + pasang callback komunikasi ---
-        const instance = module.init(gameContainer, {
+        gameContainer.innerHTML = '';
+
+        // --- Inisialisasi game + pasang callback ---
+        const instance = GameAPI.init(gameContainer, {
           onReady: (info) => console.log('[Hub] Game ready:', info),
           onExit:  (info) => {
             console.log('[Hub] Exit diminta:', info);
@@ -339,7 +346,7 @@
           onState: (info) => console.log('[Hub] State:', info)
         });
 
-        // --- Simpan handle supaya bisa dikontrol & dibersihkan ---
+        // --- Simpan handle untuk kontrol ---
         activeModule = {
           destroy: () => { try { instance.destroy(); } catch (e) {} },
           pause:   () => { try { instance.pause();   } catch (e) {} },
@@ -349,13 +356,7 @@
       } catch (err) {
         console.error('[Hub] Gagal memuat game:', err);
         gameContainer.innerHTML = '';
-        alert(
-          `Gagal memuat game "${data.title}".\n\n` +
-          `Pastikan:\n` +
-          `• File "${data.module}" sudah ada\n` +
-          `• Halaman dijalankan via server (bukan file://)`
-        );
-        // --- Kembali ke detail kalau gagal ---
+        alert(`Gagal memuat "${data.title}".\n\n${err.message}`);
         showView(detailView);
       }
     }
@@ -367,19 +368,6 @@
 
     backBtn.addEventListener('click', goHome);
     playBtn.addEventListener('click', launchGame);
-    exitGameBtn.addEventListener('click', () => {
-      // --- Kalau ada instance, tanya dulu lewat instance.exit() (biar game bisa konfirmasi) ---
-      if (activeModule) {
-        // --- Panggil exit dari instance — game akan trigger onExit callback ---
-        // --- Tapi kalau game tidak menyediakan, langsung paksa keluar ---
-        try {
-          // --- instance tidak expose exit di API return, jadi fallback ke destroy ---
-          exitGame();
-        } catch (e) { exitGame(); }
-      } else {
-        exitGame();
-      }
-    });
 
     // --- Auto pause/resume saat tab tidak aktif ---
     document.addEventListener('visibilitychange', () => {
