@@ -1,8 +1,12 @@
 // games/minesweeper.js
-// --- Minesweeper ES Module ---
-// --- Export: init(container, options) ---
+// --- Minesweeper Classic Script ---
+// --- Global: window.Minesweeper ---
+// --- Call: Minesweeper.init(container, options) ---
 // --- Options: onReady, onExit, onWin, onLose, onState ---
 // --- Return: { pause, resume, exit, destroy } ---
+
+(function () {
+'use strict';
 
 // --- CSS ---
 const CSS = `
@@ -206,6 +210,7 @@ const CSS = `
 .confirm-cancel:active { background: #d0dca8; }
 .confirm-yes { background: #7cb518; color: #fff; box-shadow: 0 3px 0 #5d8a10; }
 .confirm-yes:active { transform: translateY(2px); box-shadow: 0 1px 0 #5d8a10; }
+.confirm-yes.danger { background: #e05252; box-shadow: 0 3px 0 #b03838; }
 
 .history-overlay { position: absolute; inset: 0; z-index: 96; display: flex; align-items: center; justify-content: center; padding: 24px; background: rgba(8,16,3,.72); -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px); opacity: 0; visibility: hidden; transition: opacity .25s, visibility .25s; }
 .history-overlay.show { opacity: 1; visibility: visible; }
@@ -345,6 +350,17 @@ const HTML = `
   </div>
 </div>
 
+<div class="confirm-overlay" id="exitConfirmOverlay">
+  <div class="confirm-card">
+    <h3 class="confirm-title">Keluar dari game?</h3>
+    <p class="confirm-sub">Progress permainan saat ini akan hilang. Yakin ingin keluar?</p>
+    <div class="confirm-actions">
+      <button class="confirm-btn confirm-cancel" id="exitConfirmCancel">Tidak</button>
+      <button class="confirm-btn confirm-yes danger" id="exitConfirmYes">Ya, Keluar</button>
+    </div>
+  </div>
+</div>
+
 <div class="history-overlay" id="historyOverlay">
   <div class="history-card">
     <div class="history-header">
@@ -449,8 +465,8 @@ const HTML = `
 </div>
 `;
 
-// --- Main Export ---
-export function init(container, options = {}) {
+// --- Main Function ---
+function init(container, options = {}) {
   const {
     onReady = null,
     onExit = null,
@@ -459,8 +475,14 @@ export function init(container, options = {}) {
     onState = null,
   } = options;
 
+  // --- Buat child element sebagai shadow host ---
+  // --- Tujuannya: container boleh dipakai ulang berkali-kali ---
+  const shadowHost = document.createElement('div');
+  shadowHost.style.cssText = 'width:100%; height:100%; display:block; position:relative;';
+  container.appendChild(shadowHost);
+
   // --- Shadow Root Setup ---
-  const shadow = container.attachShadow({ mode: 'open' });
+  const shadow = shadowHost.attachShadow({ mode: 'open' });
   const styleEl = document.createElement('style');
   styleEl.textContent = CSS;
   shadow.appendChild(styleEl);
@@ -472,7 +494,65 @@ export function init(container, options = {}) {
 
   // --- Element Helper ---
   const $ = (id) => appEl.querySelector('#' + id);
+  
+  // --- Storage Namespace ---
+  const store = (window.AppStorage) ? window.AppStorage.namespace('minesweeper') : null;
 
+  // --- Save / Load helpers ---
+function saveStats() {
+  if (!store) return;
+  store.set('stats', stats);
+  store.set('history', history);
+  store.set('totalCellsRevealed', totalCellsRevealed);
+  store.set('totalBombsCorrectlyFlagged', totalBombsCorrectlyFlagged);
+}
+
+function saveSettings() {
+  if (!store) return;
+  store.set('settings', {
+    muted: muted,
+    unlimitedZoomOut: unlimitedZoomOut,
+    menuVerticalOffset: menuVerticalOffset,
+    menuSize: menuSize
+  });
+}
+
+function loadPersisted() {
+  if (!store) return;
+  // --- Load stats ---
+  const savedStats = store.get('stats', null);
+  if (savedStats && typeof savedStats === 'object') {
+    Object.keys(stats).forEach(k => {
+      if (savedStats[k] && typeof savedStats[k] === 'object') {
+        stats[k].played   = savedStats[k].played   || 0;
+        stats[k].wins     = savedStats[k].wins     || 0;
+        stats[k].losses   = savedStats[k].losses   || 0;
+        stats[k].bestTime = (typeof savedStats[k].bestTime === 'number') ? savedStats[k].bestTime : null;
+      }
+    });
+  }
+  // --- Load history ---
+  const savedHistory = store.get('history', null);
+  if (Array.isArray(savedHistory)) {
+    history.length = 0;
+    savedHistory.forEach(h => history.push(h));
+    if (history.length > 30) history.length = 30;
+  }
+  // --- Load counters ---
+  const tc = store.get('totalCellsRevealed', null);
+  if (typeof tc === 'number') totalCellsRevealed = tc;
+  const tb = store.get('totalBombsCorrectlyFlagged', null);
+  if (typeof tb === 'number') totalBombsCorrectlyFlagged = tb;
+  // --- Load settings ---
+  const s = store.get('settings', null);
+  if (s && typeof s === 'object') {
+    if (typeof s.muted === 'boolean') muted = s.muted;
+    if (typeof s.unlimitedZoomOut === 'boolean') unlimitedZoomOut = s.unlimitedZoomOut;
+    if (typeof s.menuVerticalOffset === 'number') menuVerticalOffset = s.menuVerticalOffset;
+    if (typeof s.menuSize === 'number') menuSize = s.menuSize;
+  }
+}
+  
   // --- Cleanup Registry ---
   const cleanups = [];
   const addCleanup = (fn) => cleanups.push(fn);
@@ -485,7 +565,7 @@ export function init(container, options = {}) {
   const emit = (name, fn, payload) => { if (typeof fn === 'function') { try { fn(payload); } catch (e) { console.warn('[Minesweeper] callback error:', e); } } };
 
   // --- DOM References ---
-  const appElRef   = $('app');
+  const appElRef   = appEl;
   const canvas     = $('board');
   const ctx        = canvas.getContext('2d', { alpha: false });
   const boardWrap  = $('boardWrap');
@@ -515,6 +595,9 @@ export function init(container, options = {}) {
   const confirmOverlay = $('confirmOverlay');
   const confirmCancel  = $('confirmCancel');
   const confirmYes     = $('confirmYes');
+  const exitConfirmOverlay = $('exitConfirmOverlay');
+  const exitConfirmCancel  = $('exitConfirmCancel');
+  const exitConfirmYes     = $('exitConfirmYes');
   const historyOverlay  = $('historyOverlay');
   const historyListEl   = $('historyList');
   const historyCloseX   = $('historyCloseX');
@@ -573,14 +656,31 @@ export function init(container, options = {}) {
   if (typeof onExit === 'function') {
     exitBtn.classList.add('show');
     exitBtn.addEventListener('click', () => {
-      // --- Konfirmasi kalau masih main ---
-      if (started && !finished) {
-        const ok = window.confirm('Keluar dari game? Progress akan hilang.');
-        if (!ok) return;
-      }
-      emit('onExit', onExit, { game: 'minesweeper', time: timer, difficulty: activeMode });
+      // --- Selalu tampilkan konfirmasi custom ---
+      exitConfirmOverlay.classList.add('show');
+      if (started && !finished) pauseTimer();
     });
   }
+
+  // --- Exit Confirm Handlers ---
+  exitConfirmCancel.addEventListener('click', () => {
+    exitConfirmOverlay.classList.remove('show');
+    if (started && !finished) resumeTimer();
+    beep(600, 0.04, 'sine', 0.03);
+  });
+
+  exitConfirmYes.addEventListener('click', () => {
+    exitConfirmOverlay.classList.remove('show');
+    beep(700, 0.05, 'sine', 0.04);
+    emit('onExit', onExit, { game: 'minesweeper', time: timer, difficulty: activeMode });
+  });
+
+  exitConfirmOverlay.addEventListener('click', (e) => {
+    if (e.target === exitConfirmOverlay) {
+      exitConfirmOverlay.classList.remove('show');
+      if (started && !finished) resumeTimer();
+    }
+  });
 
   // --- Config ---
   const CONFIG = {
@@ -697,6 +797,20 @@ export function init(container, options = {}) {
     if (adjCache.size >= ADJ_CACHE_MAX) adjCache.clear();
     adjCache.set(k, n);
     return n;
+  }
+
+  // --- Count Correctly Flagged (end-game only) ---
+  // --- Dihitung mundur saat game berakhir supaya tidak bocor via statistik realtime ---
+  function countCorrectlyFlagged() {
+    let count = 0;
+    flaggedSet.forEach((key) => {
+      // --- Decode key numerik kembali menjadi (r, c) ---
+      // --- makeKey(r,c) = (r+OFFSET)*STRIDE + (c+OFFSET) ---
+      const c = (key % KEY_STRIDE) - KEY_OFFSET;
+      const r = ((key - (c + KEY_OFFSET)) / KEY_STRIDE) - KEY_OFFSET;
+      if (isBomb(r, c)) count++;
+    });
+    return count;
   }
 
   // --- Audio ---
@@ -1170,7 +1284,8 @@ export function init(container, options = {}) {
     if (!flaggedSet.has(k)) {
       if (!infinite && flags >= gridMines) return;
       flaggedSet.add(k); flags++;
-      if (isBomb(r, c)) { totalBombsCorrectlyFlagged++; statBombsFlaggedEl.textContent = totalBombsCorrectlyFlagged; }
+      // --- Fix BUG 2: JANGAN update totalBombsCorrectlyFlagged di sini ---
+      // --- (menghindari kebocoran informasi realtime lewat statistik) ---
       beep(820, 0.05, 'triangle', 0.03);
     } else { flaggedSet.delete(k); flags--; beep(430, 0.05, 'triangle', 0.03); }
     updateHud(); requestDraw();
@@ -1221,6 +1336,9 @@ export function init(container, options = {}) {
         if (bombSet.has(kk) && !flaggedSet.has(kk) && !revealedSet.has(kk)) revealedSet.add(kk);
       }
     }
+    // --- Fix BUG 2: hitung mundur flag yang benar SEKALI di akhir game ---
+    totalBombsCorrectlyFlagged += countCorrectlyFlagged();
+    statBombsFlaggedEl.textContent = totalBombsCorrectlyFlagged;
     requestDraw(); recordResult(false);
     setTimeout(() => showResultOverlay(false, 'Game Over', 'You hit a mine!'), 2000);
   }
@@ -1237,6 +1355,10 @@ export function init(container, options = {}) {
     beep(880, 0.12, 'sine', 0.07);
     setTimeout(() => beep(1174, 0.16, 'sine', 0.07), 120);
     setTimeout(() => beep(1568, 0.22, 'sine', 0.07), 260);
+    // --- Fix BUG 2: hitung mundur flag yang benar SEKALI di akhir game ---
+    // --- (dipanggil setelah flaggedSet dikoreksi, jadi nilainya = gridMines) ---
+    totalBombsCorrectlyFlagged += countCorrectlyFlagged();
+    statBombsFlaggedEl.textContent = totalBombsCorrectlyFlagged;
     recordResult(true);
     setTimeout(() => showResultOverlay(true, 'You Won!', 'Time: ' + formatTime(timer)), 800);
   }
@@ -1336,7 +1458,17 @@ export function init(container, options = {}) {
     const payload = { game: 'minesweeper', difficulty: activeMode, difficultyLabel: label, time: timer, timeFormatted: formatTime(timer), flags, revealed: revealedCount, infinite };
     if (won) emit('onWin', onWin, payload);
     else emit('onLose', onLose, payload);
-  }
+    
+    // --- Persist ke storage ---
+saveStats();
+if (window.AppStorage) {
+  window.AppStorage.recordPlay('minesweeper', {
+    won: won,
+    time: timer,
+    difficulty: activeMode,
+    difficultyLabel: label
+  });
+}}
 
   function updateStatsUI() {
     let totalPlayed = 0, totalWins = 0, totalLosses = 0;
@@ -1414,39 +1546,71 @@ export function init(container, options = {}) {
 
   // --- Options Menu ---
   function closeOptionsMenu() { optionsMenu.classList.remove('show'); optionsTarget = null; requestDraw(); }
-  function showMenuForTarget(r, c, clientX, clientY) {
+
+  function showMenuForTarget(r, c) {
     optionsTarget = { r, c };
     optionsMenu.classList.add('show');
     optionsMenu.style.setProperty('--opt-btn-size', menuSize + 'px');
+
+    // --- Hitung posisi cell dalam koordinat viewport ---
+    const canvasRect = canvas.getBoundingClientRect();
     const appRect = appElRef.getBoundingClientRect();
+
+    // --- Titik tengah cell dalam koordinat viewport ---
+    const cellCenterX_viewport = canvasRect.left + (c * cellSize - cameraX + cellSize / 2);
+    const cellCenterY_viewport = canvasRect.top  + (r * cellSize - cameraY + cellSize / 2);
+
+    // --- Konversi ke koordinat lokal .app (untuk posisi absolute) ---
+    const cellCenterX = cellCenterX_viewport - appRect.left;
+    const cellCenterY = cellCenterY_viewport - appRect.top;
+
     const popupW = optionsMenu.offsetWidth;
     const popupH = optionsMenu.offsetHeight;
-    let x = (clientX - appRect.left) - popupW / 2;
-    let y = (clientY - appRect.top) - popupH + menuVerticalOffset;
-    if (y < 8) y = (clientY - appRect.top) + cellSize + 12;
+
+    // --- Posisi default: popup di atas cell, horizontal center ---
+    let x = cellCenterX - popupW / 2;
+    let y = (cellCenterY - cellSize / 2) - popupH + menuVerticalOffset;
+
+    // --- Kalau kepotong atas, pindah ke bawah cell ---
+    if (y < 8) y = cellCenterY + cellSize / 2 + 12;
+
+    // --- Clamp ke bounds .app ---
     x = Math.max(8, Math.min(appRect.width - popupW - 8, x));
     y = Math.max(8, Math.min(appRect.height - popupH - 8, y));
-    optionsMenu.style.left = x + 'px'; optionsMenu.style.top = y + 'px';
+
+    optionsMenu.style.left = x + 'px';
+    optionsMenu.style.top  = y + 'px';
     requestDraw();
   }
+
   optCancel.addEventListener('click', (e) => { e.stopPropagation(); closeOptionsMenu(); });
   optReveal.addEventListener('click', (e) => { e.stopPropagation(); const t = optionsTarget; closeOptionsMenu(); if (t) openCell(t.r, t.c); });
   optFlag.addEventListener('click', (e) => { e.stopPropagation(); const t = optionsTarget; closeOptionsMenu(); if (t) toggleFlag(t.r, t.c); });
 
   // --- Pointer Interaction ---
-  addGlobal(document, 'pointerdown', (e) => {
-    if (!optionsMenu.classList.contains('show')) return;
-    if (optionsMenu.contains(e.target)) return;
-    if (optionsTarget && e.target === canvas) {
-      const rect = canvas.getBoundingClientRect();
-      const worldX = (e.clientX - rect.left) + cameraX;
-      const worldY = (e.clientY - rect.top) + cameraY;
-      const r = Math.floor(worldY / cellSize);
-      const c = Math.floor(worldX / cellSize);
-      if (r === optionsTarget.r && c === optionsTarget.c) return;
-    }
-    closeOptionsMenu();
-  }, true);
+  // --- Pointer Interaction ---
+addGlobal(document, 'pointerdown', (e) => {
+  if (!optionsMenu.classList.contains('show')) return;
+
+  // --- Pakai composedPath untuk lintas shadow boundary ---
+  // --- (e.target di-retarget jadi shadowHost kalau klik dari dalam shadow) ---
+  const path = (typeof e.composedPath === 'function') ? e.composedPath() : [e.target];
+
+  // --- Klik di dalam options menu → biarkan (jangan tutup) ---
+  if (path.indexOf(optionsMenu) !== -1) return;
+
+  // --- Klik di cell target yang sama → biarkan (jangan tutup) ---
+  if (optionsTarget && path.indexOf(canvas) !== -1) {
+    const rect = canvas.getBoundingClientRect();
+    const worldX = (e.clientX - rect.left) + cameraX;
+    const worldY = (e.clientY - rect.top) + cameraY;
+    const r = Math.floor(worldY / cellSize);
+    const c = Math.floor(worldX / cellSize);
+    if (r === optionsTarget.r && c === optionsTarget.c) return;
+  }
+
+  closeOptionsMenu();
+}, true);
 
   canvas.addEventListener('pointerdown', (e) => {
     if (e.pointerType === 'mouse' && e.button !== 0) return;
@@ -1499,7 +1663,11 @@ export function init(container, options = {}) {
     const dx = e.clientX - pointerDown.x;
     const dy = e.clientY - pointerDown.y;
     if (!pointerDown.moved && Math.abs(dx) + Math.abs(dy) > 8) {
-      pointerDown.moved = true; panning = true; closeOptionsMenu();
+      pointerDown.moved = true;
+      panning = true;
+      // --- Batalkan pending tap & tutup menu saat mulai pan ---
+      if (lastTap) { clearTimeout(lastTap.timer); lastTap = null; }
+      closeOptionsMenu();
     }
     if (panning) {
       cameraX = pointerDown.cameraX - dx;
@@ -1539,7 +1707,7 @@ export function init(container, options = {}) {
     const c = Math.floor(worldX / cellSize);
     if (!infinite && (r < 0 || r >= gridRows || c < 0 || c >= gridCols)) return;
     if (finished) return;
-    handleTap(r, c, e.clientX, e.clientY);
+    handleTap(r, c);
   });
 
   canvas.addEventListener('pointercancel', (e) => {
@@ -1550,13 +1718,18 @@ export function init(container, options = {}) {
 
   // --- Tap Logic ---
   const DOUBLE_TAP_MS = 260;
-  function handleTap(r, c, clientX, clientY) {
+  function handleTap(r, c) {
     const k = makeKey(r, c);
+
+    // --- Tap cell yang sudah revealed → chord ---
     if (revealedSet.has(k)) {
+      if (lastTap) { clearTimeout(lastTap.timer); lastTap = null; }
       closeOptionsMenu();
       if (!isBomb(r, c)) { const adj = getAdj(r, c); if (adj > 0) tryChord(r, c, adj); }
       return;
     }
+
+    // --- Double-tap pada cell yang sama → reveal ---
     const now = Date.now();
     if (lastTap && lastTap.r === r && lastTap.c === c && (now - lastTap.time) < DOUBLE_TAP_MS) {
       clearTimeout(lastTap.timer);
@@ -1567,11 +1740,26 @@ export function init(container, options = {}) {
       requestDraw();
       return;
     }
-    if (lastTap) { clearTimeout(lastTap.timer); lastTap = null; }
+
+    // --- Tap pada cell yang sama dengan menu yang sedang tampil → biarkan ---
     if (optionsMenu.classList.contains('show') && optionsTarget && optionsTarget.r === r && optionsTarget.c === c) return;
+
+    // --- Tap pada cell berbeda → batalkan tap lama, tutup menu lama ---
+    if (lastTap) { clearTimeout(lastTap.timer); lastTap = null; }
+    if (optionsMenu.classList.contains('show')) {
+      optionsMenu.classList.remove('show');
+    }
+
+    // --- Highlight cell target baru ---
     optionsTarget = { r, c };
     requestDraw();
-    const timerHandle = setTimeout(() => { lastTap = null; showMenuForTarget(r, c, clientX, clientY); }, DOUBLE_TAP_MS);
+
+    // --- Jadwalkan menu terbuka ---
+    const timerHandle = setTimeout(() => {
+      lastTap = null;
+      showMenuForTarget(r, c);
+    }, DOUBLE_TAP_MS);
+
     lastTap = { r, c, time: now, timer: timerHandle };
   }
 
@@ -1616,6 +1804,7 @@ export function init(container, options = {}) {
     else ddLabel.textContent = CONFIG[activeMode].label;
     Array.prototype.forEach.call(menuEl.querySelectorAll('button'), (b) => b.classList.toggle('active', b.dataset.key === currentKey));
     closeOptionsMenu(); closeDashboard(); hideResultOverlay(); hideConfirmModal(); closeHistoryModal();
+    exitConfirmOverlay.classList.remove('show');
     stopTimer(); timer = 0; timerEl.textContent = '000';
     flags = 0; revealedCount = 0; started = false; finished = false;
     explodedMines.clear(); activeExplosion = null; canvasFlash = null;
@@ -1731,15 +1920,19 @@ export function init(container, options = {}) {
     menuVerticalOffset = parseInt(menuOffsetSlider.value, 10);
     menuOffsetVal.textContent = menuVerticalOffset + 'px';
   });
-  menuOffsetSlider.addEventListener('change', () => { menuOffsetVal.textContent = menuVerticalOffset + 'px'; beep(700, 0.04, 'sine', 0.03); });
+  // --- Fix BUG 1: tambahkan saveSettings() di handler change ---
+  menuOffsetSlider.addEventListener('change', () => { menuOffsetVal.textContent = menuVerticalOffset + 'px'; beep(700, 0.04, 'sine', 0.03); saveSettings(); });
 
   menuSizeSlider.addEventListener('input', () => {
     menuSize = parseInt(menuSizeSlider.value, 10);
     menuSizeVal.textContent = menuSize + 'px';
     optionsMenu.style.setProperty('--opt-btn-size', menuSize + 'px');
+    saveSettings();
   });
-  menuSizeSlider.addEventListener('change', () => { menuSizeVal.textContent = menuSize + 'px'; beep(700, 0.04, 'sine', 0.03); });
-
+  // --- Fix BUG 1: tambahkan saveSettings() juga di handler change ---
+  menuSizeSlider.addEventListener('change', () => { menuSizeVal.textContent = menuSize + 'px'; beep(700, 0.04, 'sine', 0.03); saveSettings(); });
+  // --- Fix BUG 1: baris `saveSettings();` yang berdiri sendiri di sini SUDAH DIHAPUS ---
+  // --- (dulu menulis nilai default ke storage sebelum loadPersisted() dipanggil) ---
   cfgColsEl.addEventListener('change', () => { const v = parseInt(cfgColsEl.value, 10); customConfig.cols = isNaN(v) ? 16 : Math.max(5, Math.min(500, v)); cfgColsEl.value = customConfig.cols; });
   cfgRowsEl.addEventListener('change', () => { const v = parseInt(cfgRowsEl.value, 10); customConfig.rows = isNaN(v) ? 16 : Math.max(5, Math.min(500, v)); cfgRowsEl.value = customConfig.rows; });
   cfgMinesEl.addEventListener('change', () => {
@@ -1773,6 +1966,7 @@ export function init(container, options = {}) {
     optUnlimitedZoom.classList.toggle('on', unlimitedZoomOut);
     updateZoomButtons();
     beep(700, 0.05, 'sine', 0.04);
+    saveSettings();
   });
 
   playTutorialBtn.addEventListener('click', () => openTutorial());
@@ -1782,12 +1976,14 @@ export function init(container, options = {}) {
     soundBtn.classList.toggle('muted', muted);
     syncSoundSwitch();
     if (!muted) beep(700, 0.06, 'sine', 0.05);
+    saveSettings();
   });
   soundBtn.addEventListener('click', () => {
     muted = !muted;
     soundBtn.classList.toggle('muted', muted);
     syncSoundSwitch();
     if (!muted) beep(700, 0.06, 'sine', 0.05);
+    saveSettings();
   });
 
   playBtn.addEventListener('click', () => {
@@ -1841,7 +2037,11 @@ export function init(container, options = {}) {
 
   addGlobal(document, 'keydown', (e) => {
     if (e.key === 'Escape') {
-      if (historyOverlay.classList.contains('show')) closeHistoryModal();
+      if (exitConfirmOverlay.classList.contains('show')) {
+        exitConfirmOverlay.classList.remove('show');
+        if (started && !finished) resumeTimer();
+      }
+      else if (historyOverlay.classList.contains('show')) closeHistoryModal();
       else if (confirmOverlay.classList.contains('show')) hideConfirmModal();
       else if (tutorialOverlay.classList.contains('show')) closeTutorial();
       else if (resultOverlay.classList.contains('show')) hideResultOverlay();
@@ -1853,6 +2053,9 @@ export function init(container, options = {}) {
   addGlobal(document, 'gesturestart', (e) => e.preventDefault());
 
   // --- Init ---
+  // --- Fix BUG 1: loadPersisted() harus dipanggil PALING AWAL ---
+  // --- agar nilai dari storage dipakai sebelum UI di-setup / digambar ---
+  loadPersisted();
   syncSoundSwitch(); syncUnlimitedZoomSwitch();
   menuOffsetSlider.value = menuVerticalOffset;
   menuOffsetVal.textContent = menuVerticalOffset + 'px';
@@ -1872,12 +2075,21 @@ export function init(container, options = {}) {
     pause() { if (started && !finished) pauseTimer(); },
     resume() { if (started && !finished) resumeTimer(); },
     exit() {
+      saveStats();
+      saveSettings();
       if (typeof onExit === 'function') emit('onExit', onExit, { game: 'minesweeper', time: timer, difficulty: activeMode });
     },
     destroy() {
+      saveStats();
+      saveSettings();
       try { stopTimer(); } catch (e) {}
       cleanups.forEach(fn => { try { fn(); } catch (e) {} });
-      try { shadow.innerHTML = ''; } catch (e) {}
+      try { shadowHost.remove(); } catch (e) {}
     }
   };
 }
+
+// --- Expose ke global scope ---
+window.Minesweeper = { init };
+
+})();
