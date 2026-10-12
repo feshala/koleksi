@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 260">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#16324f"/><stop offset="1" stop-color="#0d2438"/>
+    </linearGradient>
+  </defs>
+  <rect width="400" height="260" fill="url(#bg)"/>
+  <g transform="translate(90,70)">
+    <rect x="0" y="0" width="70" height="110" rx="12" fill="#eef6ff"/>
+    <text x="35" y="66" font-size="40" text-anchor="middle">🦊</text>
+    <rect x="85" y="0" width="70" height="110" rx="12" fill="#eef6ff"/>
+    <text x="120" y="66" font-size="40" text-anchor="middle">🐼</text>
+    <rect x="170" y="0" width="70" height="110" rx="12" fill="#2e6fb0" stroke="rgba(255,255,255,.25)" stroke-width="2"/>
+    <circle cx="205" cy="55" r="20" fill="none" stroke="rgba(255,255,255,.4)" stroke-width="3" stroke-dasharray="6 6"/>
+    <rect x="42" y="-14" width="70" height="110" rx="12" fill="#d9f4df" stroke="#35b46a" stroke-width="3"/>
+    <text x="77" y="52" font-size="40" text-anchor="middle">🦊</text>
+  </g>
+  <text x="200" y="235" font-family="Arial, sans-serif" font-size="26" font-weight="bold" fill="#dff1ff" text-anchor="middle">Memory Match</text>
+</svg>

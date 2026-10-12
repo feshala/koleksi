@@ -3,6 +3,8 @@
 // --- Global: window.AppStorage ---
 // --- Namespace per game: AppStorage.namespace('gameId') ---
 // --- Cross-game: AppStorage.recordPlay(), getGlobalStats(), getRecent() ---
+// --- Per-game history & ranking: getPlaysByGame(), getGameStats(), getLeaderboard() ---
+// --- Atomic read-modify-write: AppStorage.update(gameId, key, default, updater) ---
 
 (function () {
 'use strict';
@@ -88,6 +90,15 @@ function clearAll() {
   toRemove.forEach(k => { try { backend.removeItem(k); } catch (e) {} });
 }
 
+// --- Atomic update: baca -> modifikasi -> simpan dalam satu panggilan ---
+// --- Pemakaian: AppStorage.update('uno', 'scores', [0,0], (cur) => cur.map(s => s + 10)) ---
+function update(gameId, key, defaultValue, updater) {
+  const current = get(gameId, key, defaultValue);
+  if (typeof updater !== 'function') return current;
+  const next = updater(current);
+  return set(gameId, key, next) ? next : current;
+}
+
 // --- Namespace per game ---
 // --- Pemakaian: const store = AppStorage.namespace('minesweeper') ---
 // --- store.set('stats', {...}) / store.get('stats', {}) ---
@@ -96,6 +107,7 @@ function namespace(gameId) {
     gameId: gameId,
     get:    (key, def) => get(gameId, key, def),
     set:    (key, value) => set(gameId, key, value),
+    update: (key, def, updater) => update(gameId, key, def, updater),
     remove: (key) => remove(gameId, key),
     clear:  () => clear(gameId)
   };
@@ -156,6 +168,48 @@ function getRecent(limit) {
   return limit ? recent.slice(0, limit) : recent;
 }
 
+// --- Riwayat bermain per game (filter dari feed recent) ---
+// --- Pemakaian: AppStorage.getPlaysByGame('minesweeper', 5) ---
+function getPlaysByGame(gameId, limit) {
+  const plays = getRecent().filter(r => r && r.gameId === gameId);
+  return limit ? plays.slice(0, limit) : plays;
+}
+
+// --- Statistik ringkas satu game dari registry ---
+// --- Return null kalau game belum pernah tercatat ---
+function getGameStats(gameId) {
+  const reg = getRegistry();
+  const g = reg[gameId];
+  if (!g) return null;
+  const played = g.playCount || 0;
+  const wins   = g.wins      || 0;
+  return Object.assign({}, g, {
+    playCount: played,
+    wins: wins,
+    losses: g.losses || 0,
+    winRate: played ? Math.round((wins / played) * 100) : 0
+  });
+}
+
+// --- Leaderboard sederhana: ranking game berdasarkan metrik tertentu ---
+// --- metric: 'playCount' | 'wins' | 'losses' | 'winRate' ---
+function getLeaderboard(metric, limit) {
+  metric = metric || 'playCount';
+  const stats = getGlobalStats();
+  const rows = Object.keys(stats.games).map(id => {
+    const g = stats.games[id];
+    const played = g.playCount || 0;
+    const wins   = g.wins      || 0;
+    let value;
+    if (metric === 'winRate') value = played ? (wins / played) * 100 : -1;
+    else value = g[metric] || 0;
+    return { gameId: id, value: value };
+  });
+  rows.sort((a, b) => b.value - a.value);
+  const ranked = rows.map((r, i) => ({ rank: i + 1, gameId: r.gameId, value: r.value }));
+  return limit ? ranked.slice(0, limit) : ranked;
+}
+
 function getGlobalStats() {
   const reg = getRegistry();
   let totalPlayed = 0, totalWins = 0, totalLosses = 0;
@@ -185,11 +239,14 @@ function clearAllAndRegistry() {
 window.AppStorage = {
   version: VERSION,
   isPersistent: persistent,
-  get: get, set: set, remove: remove, clear: clear, clearAll: clearAll,
+  get: get, set: set, remove: remove, update: update, clear: clear, clearAll: clearAll,
   namespace: namespace,
   registerGame: registerGame,
   recordPlay: recordPlay,
   getRecent: getRecent,
+  getPlaysByGame: getPlaysByGame,
+  getGameStats: getGameStats,
+  getLeaderboard: getLeaderboard,
   getGlobalStats: getGlobalStats,
   getRegistry: getRegistry,
   clearAllAndRegistry: clearAllAndRegistry
