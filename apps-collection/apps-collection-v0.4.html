@@ -196,6 +196,20 @@
       </div>
       <div class="game-title">Uno</div>
     </div>
+
+    <div class="game-card" data-game="memory-match">
+      <div class="game-image">
+        <img src="assets/memory-match.svg" alt="Memory Match">
+      </div>
+      <div class="game-title">Memory Match</div>
+    </div>
+
+    <div class="game-card" data-game="g2048">
+      <div class="game-image">
+        <img src="assets/2048.svg" alt="2048">
+      </div>
+      <div class="game-title">2048</div>
+    </div>
   </main>
 
   <!-- --- DETAIL VIEW --- -->
@@ -236,6 +250,20 @@
         script: 'games/uno.js',
         global: 'Uno',
         howTo: 'Cocokkan kartu di tanganmu dengan kartu paling atas di meja — sama warna atau sama angka. Habiskan semua kartu lebih dulu untuk menang.'
+      },
+      'memory-match': {
+        title: 'Memory Match',
+        image: 'assets/memory-match.svg',
+        script: 'games/memory-match.js',
+        global: 'MemoryMatch',
+        howTo: 'Balik dua kartu sekaligus dan jodohkan semua pasangan emoji. Semakin sedikit langkah dan semakin cepat waktu selesai, semakin banyak bintang yang kamu dapatkan. Kartu akan dipreview sebentar di awal permainan — manfaatkan!'
+      },
+      g2048: {
+        title: '2048',
+        image: 'assets/2048.svg',
+        script: 'games/2048.js',
+        global: 'Game2048',
+        howTo: 'Geser (swipe atau tombol panah) untuk memindahkan semua papan. Dua papan dengan angka sama akan bergabung menjadi dua kali lipatnya. Gabungkan terus hingga mencapai papan 2048! Papan tersimpan otomatis saat kamu keluar.'
       }
     };
 
